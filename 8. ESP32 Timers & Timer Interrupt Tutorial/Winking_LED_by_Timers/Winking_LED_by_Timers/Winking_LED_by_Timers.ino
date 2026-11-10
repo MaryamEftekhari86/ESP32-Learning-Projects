@@ -1,28 +1,46 @@
-#define LED_PIN 4
+#include <Preferences.h>
+Preferences preferences;
+#define LED_PIN 8
+#define BTN_GPIO 9 
 
-hw_timer_t *Timer0_Cfg = NULL;
-
-void IRAM_ATTR Timer0_ISR() {
-    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-}
+bool ledState = false;
 
 void setup() {
-    Serial.begin(115200);
-    delay(1000);
+  Serial.begin(115200);
+  delay(1000);
 
-    pinMode(LED_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BTN_GPIO, INPUT_PULLUP); // استفاده از پول‌آپ داخلی برای دکمه
 
-    // در نسخه جدید، timerBegin فقط فرکانس را می‌گیرد (مثلاً 1000000 هرتز معادل 1 مگاهرتز یا همان 1 میکروثانیه)
-    Timer0_Cfg = timerBegin(1000000);
+  // باز کردن فضای ذخیره‌سازی با نام "storage"
+  preferences.begin("led-app", false);
 
-    // اتصال تابع وقفه (بدون آرگومان سوم اضافی)
-    timerAttachInterrupt(Timer0_Cfg, &Timer0_ISR);
+  // خواندن آخرین وضعیت ذخیره‌شده (اگر مقداری نبود، به صورت پیش‌فرض false در نظر گرفته می‌شود)
+  ledState = preferences.getBool("state", false);
+  digitalWrite(LED_PIN, ledState ? HIGH : LOW);
 
-    // تنظیم آلارم برای اجرای هر 50,000 میکروثانیه (50 میلی‌ثانیه) با تکرار بی‌نهایت (true)
-    timerAlarm(Timer0_Cfg, 50000, true, 0);
-
-    Serial.println("Timer Interrupt Initialized!");
+  Serial.println("ESP32-C3 SuperMini Initialized. Last LED state loaded!");
 }
 
 void loop() {
+  // خواندن وضعیت دکمه (چون پول‌آپ است، فشردن دکمه مقدار LOW تولید می‌کند)
+  if (digitalRead(BTN_GPIO) == LOW) {
+    delay(50); // تأخیر ساده برای جلوگیری از نویز (Debounce)
+    if (digitalRead(BTN_GPIO) == LOW) {
+      
+      // تغییر وضعیت ال‌ای‌دی
+      ledState = !ledState;
+      digitalWrite(LED_PIN, ledState ? HIGH : LOW);
+
+      // ذخیره وضعیت جدید در حافظه فلش ماندگار
+      preferences.putBool("state", ledState);
+      
+      Serial.println("LED State Changed & Saved to Flash!");
+
+      // منتظر ماندن تا رها شدن دکمه
+      while (digitalRead(BTN_GPIO) == LOW) {
+        delay(10);
+      }
+    }
+  }
 }
